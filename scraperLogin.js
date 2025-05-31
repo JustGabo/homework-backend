@@ -16,6 +16,7 @@ const checkLogin = async (matricula, password) => {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
 
+    console.log("LOGIN_URL:", LOGIN_URL);
     await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded' });
 
     await page.type('#user', matricula);
