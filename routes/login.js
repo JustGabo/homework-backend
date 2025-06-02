@@ -13,12 +13,19 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const success = await checkLogin(matricula, password);
-    if (success) {
-      res.json({ success: true, message: 'Login correcto' });
+    const result = await checkLogin(matricula, password);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Login correcto',
+        nombreCompleto: result.nombreCompleto,
+        primerNombre: result.primerNombre,
+      });
     } else {
       res.status(401).json({ success: false, message: 'Credenciales incorrectas' });
     }
+
   } catch (error) {
     console.error('Error en login:', error);
     res.status(500).json({ success: false, message: 'Error interno del servidor' });

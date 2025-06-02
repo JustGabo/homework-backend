@@ -20,7 +20,7 @@ const scrapeTareas = async (matricula, password) => {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
 
     // Ir al login
-    await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto("https://login.oymas.edu.do/v2/", { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     await page.type('#user', matricula);
     await page.type('#password', password);
