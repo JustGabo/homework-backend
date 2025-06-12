@@ -1,53 +1,64 @@
+// routes/tareas.js
 const express = require('express');
 const router = express.Router();
 const scrapeTareas = require('../scraper');
-const supabase = require('../supabaseClient'); // ✅ importar supabase
+const supabase = require('../supabaseClient');
 
-// ✅ Función para guardar las tareas en caché
-const guardarTareasEnCache = async (matricula, tareas) => {
-  const { data: existente, error: errExistente } = await supabase
-    .from('tareas')
-    .select('*')
-    .eq('matricula', matricula)
-    .maybeSingle();
-
-  if (errExistente) throw errExistente;
-
-  if (existente) {
-    await supabase
-      .from('tareas')
-      .update({
-        tareas,
-        actualizado_el: new Date()
-      })
-      .eq('matricula', matricula);
-  } else {
-    await supabase
-      .from('tareas')
-      .insert([{ matricula, tareas }]);
+const validarUserId = async (user_id) => {
+  const { data, error } = await supabase.auth.admin.getUserById(user_id);
+  if (error || !data?.user) {
+    throw new Error('El user_id proporcionado no es válido en Supabase.');
   }
 };
 
-// ✅ Ruta POST para obtener tareas y guardarlas en Supabase
-router.post('/', async (req, res) => {
-  const { matricula, password } = req.body;
+const guardarTareasActualizadas = async (user_id, tareas) => {
+  await supabase
+    .from('tareas')
+    .delete()
+    .eq('user_id', user_id);
 
-  if (!matricula || !password) {
+  const tareasFormateadas = tareas.map(t => ({
+    user_id,
+    tarea_id: t.id,
+    titulo: t.titulo,
+    info: t.info,
+    fecha_entrega: t.fechaEntrega,
+    puntuacion: t.puntuacion,
+    descripcion: t.descripcion,
+    documentos: t.documentos,
+    actualizada_el: new Date(),
+  }));
+
+  const { error } = await supabase
+    .from('tareas')
+    .insert(tareasFormateadas);
+
+  if (error) throw error;
+};
+
+router.post('/', async (req, res) => {
+  const { matricula, password, user_id } = req.body;
+
+  if (!matricula || !password || !user_id) {
     return res.status(400).json({
       success: false,
-      message: 'Faltan campos requeridos: matricula o password.',
+      message: 'Faltan campos requeridos: matricula, password o user_id.',
     });
   }
 
   try {
+    // Primero validamos el user_id
+    await validarUserId(user_id);
+
+    // Hacemos el scraping
     const tareas = await scrapeTareas(matricula, password);
 
-    // ✅ Guardar en cache después del scraping
-    await guardarTareasEnCache(matricula, tareas);
+    // Guardamos las tareas en Supabase
+    await guardarTareasActualizadas(user_id, tareas);
 
     res.json({ success: true, tareas });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error en POST /tareas:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Error interno del servidor',

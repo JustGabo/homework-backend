@@ -1,6 +1,6 @@
+// scraper/scrapeTareas.js
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-
 puppeteer.use(StealthPlugin());
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -19,7 +19,6 @@ const scrapeTareas = async (matricula, password) => {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
 
-    // Ir al login
     await page.goto("https://login.oymas.edu.do/v2/", { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     await page.type('#user', matricula);
@@ -30,15 +29,13 @@ const scrapeTareas = async (matricula, password) => {
       page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
     ]);
 
-    await delay(1000); // Permite que cargue bien la interfaz
+    await delay(1000);
 
-    // Verificación más confiable del login
     const loginFallido = await page.$('div.alert-danger, #Login[disabled]');
     if (loginFallido || !page.url().includes('profile.php')) {
       throw new Error('Login fallido, credenciales incorrectas o cuenta bloqueada.');
     }
 
-    // Esperar menú de navegación
     await page.waitForSelector('ul.navigation-left li[data-item="oymas"]', { visible: true, timeout: 15000 });
 
     try {
@@ -68,7 +65,7 @@ const scrapeTareas = async (matricula, password) => {
     }
 
     const tareas = await page.$$eval('.assignment-list ul.collectionViewItems li.assignment', items =>
-      items.map(li => {
+      items.map((li, index) => {
         const titulo = li.querySelector('a.ig-title')?.textContent.trim() || null;
         const info = li.querySelector('span[style*="font-size:11px"]')?.textContent.trim().replace(/\n/g, ' ') || null;
 
@@ -80,7 +77,6 @@ const scrapeTareas = async (matricula, password) => {
 
         if (modulos) {
           const textoModulos = modulos.textContent.trim();
-
           const fechaMatch = textoModulos.match(/Fecha de entrega:\s*([^\|]+)/i);
           if (fechaMatch) fechaEntrega = fechaMatch[1].trim();
 
@@ -99,6 +95,7 @@ const scrapeTareas = async (matricula, password) => {
         }
 
         return {
+          id: `${index}-${titulo?.slice(0, 30)}`, // para evitar duplicados puedes usar un id temporal
           titulo,
           info,
           fechaEntrega,
@@ -115,13 +112,7 @@ const scrapeTareas = async (matricula, password) => {
     console.error('Error en scrapeTareas:', err.message);
     throw new Error(err.message || 'Fallo al obtener tareas');
   } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (e) {
-        console.warn('Error al cerrar el navegador:', e.message);
-      }
-    }
+    if (browser) await browser.close().catch(() => null);
   }
 };
 
