@@ -1,4 +1,3 @@
-// scraper/scrapeTareas.js
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
@@ -6,7 +5,6 @@ puppeteer.use(StealthPlugin());
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const scrapeTareas = async (matricula, password) => {
-  const LOGIN_URL = process.env.LOGIN_URL;
   let browser;
 
   try {
@@ -69,39 +67,48 @@ const scrapeTareas = async (matricula, password) => {
         const titulo = li.querySelector('a.ig-title')?.textContent.trim() || null;
         const info = li.querySelector('span[style*="font-size:11px"]')?.textContent.trim().replace(/\n/g, ' ') || null;
 
+        // Nuevos campos parseados
+        const materia = li.querySelector('.ig-details__item.subject span')?.textContent.trim() || null;
+        const profesor = li.querySelector('.ig-details__item.professor span')?.textContent.trim() || null;
+        const seccion = li.querySelector('.ig-details__item.section span')?.textContent.trim() || null;
+        const tipo = li.querySelector('.ig-details__item.type span')?.textContent.trim() || null;
+        const estado = li.querySelector('.ig-details__item.status span')?.textContent.trim() || null;
+
+        // Modulos de fecha, puntuación, descripción
         const modulos = li.querySelector('div.ig-details__item.modules');
         let fechaEntrega = null;
         let puntuacion = null;
         let descripcion = null;
-        const documentos = [];
 
         if (modulos) {
           const textoModulos = modulos.textContent.trim();
-          const fechaMatch = textoModulos.match(/Fecha de entrega:\s*([^\|]+)/i);
+
+          const fechaMatch = textoModulos.match(/Fecha de entrega:\s*([0-9\-]+)/i);
           if (fechaMatch) fechaEntrega = fechaMatch[1].trim();
 
-          const puntosMatch = textoModulos.match(/\bNo tiene puntuación\b/i);
-          puntuacion = puntosMatch ? 'No tiene puntuación' : null;
+          const puntosMatch = textoModulos.match(/\|\s*(\d+)\s*puntos?/i);
+          if (puntosMatch) {
+            puntuacion = puntosMatch[1].trim();
+          } else {
+            puntuacion = 'No tiene puntuación';
+          }
 
-          descripcion = modulos.querySelector('p')?.textContent.trim() || null;
-
-          const links = modulos.querySelectorAll('a');
-          links.forEach(a => {
-            documentos.push({
-              nombre: a.textContent.trim(),
-              enlace: a.href,
-            });
-          });
+          const parrafos = modulos.querySelectorAll('p');
+          descripcion = Array.from(parrafos).map(p => p.textContent.trim()).filter(p => p.length > 0).join('\n');
         }
 
         return {
-          id: `${index}-${titulo?.slice(0, 30)}`, // para evitar duplicados puedes usar un id temporal
+          id: `${index}-${titulo?.slice(0, 30)}`,
           titulo,
           info,
+          materia,
+          profesor,
+          seccion,
+          tipo,
+          estado,
           fechaEntrega,
           puntuacion,
           descripcion,
-          documentos,
         };
       })
     );

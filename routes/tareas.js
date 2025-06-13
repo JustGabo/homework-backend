@@ -1,4 +1,3 @@
-// routes/tareas.js
 const express = require('express');
 const router = express.Router();
 const scrapeTareas = require('../scraper');
@@ -22,10 +21,14 @@ const guardarTareasActualizadas = async (user_id, tareas) => {
     tarea_id: t.id,
     titulo: t.titulo,
     info: t.info,
+    materia: t.materia,
+    profesor: t.profesor,
+    seccion: t.seccion,
+    tipo: t.tipo,
+    estado: t.estado,
     fecha_entrega: t.fechaEntrega,
     puntuacion: t.puntuacion,
     descripcion: t.descripcion,
-    documentos: t.documentos,
     actualizada_el: new Date(),
   }));
 
@@ -47,15 +50,9 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Primero validamos el user_id
     await validarUserId(user_id);
-
-    // Hacemos el scraping
     const tareas = await scrapeTareas(matricula, password);
-
-    // Guardamos las tareas en Supabase
     await guardarTareasActualizadas(user_id, tareas);
-
     res.json({ success: true, tareas });
   } catch (error) {
     console.error('Error en POST /tareas:', error);
