@@ -17,7 +17,8 @@ const scrapeTareas = async (matricula, password) => {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
 
-    await page.goto("https://login.oymas.edu.do/v2/", { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const LOGIN_URL = process.env.LOGIN_URL; // ✅ ahora toma la URL del .env
+    await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     await page.type('#user', matricula);
     await page.type('#password', password);
@@ -67,14 +68,12 @@ const scrapeTareas = async (matricula, password) => {
         const titulo = li.querySelector('a.ig-title')?.textContent.trim() || null;
         const info = li.querySelector('span[style*="font-size:11px"]')?.textContent.trim().replace(/\n/g, ' ') || null;
 
-        // Nuevos campos parseados
         const materia = li.querySelector('.ig-details__item.subject span')?.textContent.trim() || null;
         const profesor = li.querySelector('.ig-details__item.professor span')?.textContent.trim() || null;
         const seccion = li.querySelector('.ig-details__item.section span')?.textContent.trim() || null;
         const tipo = li.querySelector('.ig-details__item.type span')?.textContent.trim() || null;
         const estado = li.querySelector('.ig-details__item.status span')?.textContent.trim() || null;
 
-        // Modulos de fecha, puntuación, descripción
         const modulos = li.querySelector('div.ig-details__item.modules');
         let fechaEntrega = null;
         let puntuacion = null;
@@ -87,11 +86,7 @@ const scrapeTareas = async (matricula, password) => {
           if (fechaMatch) fechaEntrega = fechaMatch[1].trim();
 
           const puntosMatch = textoModulos.match(/\|\s*(\d+)\s*puntos?/i);
-          if (puntosMatch) {
-            puntuacion = puntosMatch[1].trim();
-          } else {
-            puntuacion = 'No tiene puntuación';
-          }
+          puntuacion = puntosMatch ? puntosMatch[1].trim() : 'No tiene puntuación';
 
           const parrafos = modulos.querySelectorAll('p');
           descripcion = Array.from(parrafos).map(p => p.textContent.trim()).filter(p => p.length > 0).join('\n');

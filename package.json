@@ -19,7 +19,8 @@
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "nodemon": "^3.1.10",
-    "puppeteer": "^24.9.0",
+    "puppeteer": "^24.10.1",
+    "puppeteer-cluster": "^0.24.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
   }

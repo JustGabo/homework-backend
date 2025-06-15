@@ -1,20 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const scrapeTareas = require('../scraper');
-const supabase = require('../supabaseClient');
+const { supabasePublic, supabaseAdmin } = require('../supabaseClient');
 
 const validarUserId = async (user_id) => {
-  const { data, error } = await supabase.auth.admin.getUserById(user_id);
-  if (error || !data?.user) {
-    throw new Error('El user_id proporcionado no es válido en Supabase.');
+  const { data, error } = await supabaseAdmin.auth.admin.getUserById(user_id);
+  if (error) {
+    console.error('Error validando user_id en Supabase:', error);
+    throw new Error('Error validando el usuario en Supabase');
+  }
+  if (!data?.user) {
+    throw new Error('El user_id proporcionado no existe en Supabase');
   }
 };
 
 const guardarTareasActualizadas = async (user_id, tareas) => {
-  await supabase
-    .from('tareas')
-    .delete()
-    .eq('user_id', user_id);
+  // Aquí puedes usar supabaseAdmin o supabasePublic según los permisos que necesites
+  const { error: delError } = await supabaseAdmin.from('tareas').delete().eq('user_id', user_id);
+  if (delError) throw delError;
 
   const tareasFormateadas = tareas.map(t => ({
     user_id,
@@ -32,11 +35,8 @@ const guardarTareasActualizadas = async (user_id, tareas) => {
     actualizada_el: new Date(),
   }));
 
-  const { error } = await supabase
-    .from('tareas')
-    .insert(tareasFormateadas);
-
-  if (error) throw error;
+  const { error: insertError } = await supabaseAdmin.from('tareas').insert(tareasFormateadas);
+  if (insertError) throw insertError;
 };
 
 router.post('/', async (req, res) => {
@@ -55,7 +55,7 @@ router.post('/', async (req, res) => {
     await guardarTareasActualizadas(user_id, tareas);
     res.json({ success: true, tareas });
   } catch (error) {
-    console.error('Error en POST /tareas:', error);
+    console.error('Error en POST /tareas:', error.message, error.stack);
     res.status(500).json({
       success: false,
       message: error.message || 'Error interno del servidor',
