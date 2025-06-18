@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const scrapeTareas = require('../scraper');
 const { supabasePublic, supabaseAdmin } = require('../supabaseClient');
+const deepEqual = require('fast-deep-equal');
 
 const getCredentials = async (user_id) => {
   const { data, error } = await supabaseAdmin
@@ -14,28 +15,84 @@ const getCredentials = async (user_id) => {
   return data;
 };
 
-const guardarTareasActualizadas = async (user_id, tareas) => {
-  const { error: delError } = await supabaseAdmin.from('tareas').delete().eq('user_id', user_id);
-  if (delError) throw delError;
+const detectarCambios = (tareasPrevias, tareasNuevas) => {
+  const prevMap = new Map(tareasPrevias.map(t => [t.tarea_id, t]));
+  const nuevasMap = new Map(tareasNuevas.map(t => [t.tarea_id, t]));
 
-  const tareasFormateadas = tareas.map(t => ({
-    user_id,
-    tarea_id: t.id,
-    titulo: t.titulo,
-    info: t.info,
-    materia: t.materia,
-    profesor: t.profesor,
-    seccion: t.seccion,
-    tipo: t.tipo,
-    estado: t.estado,
-    fecha_entrega: t.fechaEntrega,
-    puntuacion: t.puntuacion,
-    descripcion: t.descripcion,
-    actualizada_el: new Date(),
-  }));
+  const nuevas = [];
+  const actualizadas = [];
+  const eliminadas = [];
 
-  const { error: insertError } = await supabaseAdmin.from('tareas').insert(tareasFormateadas);
-  if (insertError) throw insertError;
+  for (const nueva of tareasNuevas) {
+    const previa = prevMap.get(nueva.tarea_id);
+    if (!previa) {
+      nuevas.push(nueva);
+    } else {
+      const haCambiado = !deepEqual({ ...nueva }, { ...previa });
+      if (haCambiado) actualizadas.push(nueva);
+    }
+  }
+
+  for (const previa of tareasPrevias) {
+    if (!nuevasMap.has(previa.tarea_id)) {
+      eliminadas.push(previa);
+    }
+  }
+
+  return { nuevas, actualizadas, eliminadas };
+};
+
+const sincronizarCambios = async (user_id, nuevas, actualizadas, eliminadas) => {
+  const tareasToInsert = nuevas.map(t => ({ ...t, user_id, actualizada_el: new Date() }));
+  const tareasToUpdate = actualizadas.map(t => ({ ...t, user_id, actualizada_el: new Date() }));
+
+  if (tareasToInsert.length > 0) {
+    await supabaseAdmin.from('tareas').insert(tareasToInsert);
+  }
+
+  for (const tarea of tareasToUpdate) {
+    await supabaseAdmin
+      .from('tareas')
+      .update(tarea)
+      .eq('user_id', user_id)
+      .eq('tarea_id', tarea.tarea_id);
+  }
+
+  for (const tarea of eliminadas) {
+    await supabaseAdmin
+      .from('tareas')
+      .delete()
+      .eq('user_id', user_id)
+      .eq('tarea_id', tarea.tarea_id);
+  }
+};
+
+const guardarTareasActualizadas = async (user_id, tareasScrapeadas) => {
+  const tareasFormateadas = tareasScrapeadas
+    .filter(t => t.id)
+    .map(t => ({
+      tarea_id: t.id,
+      titulo: t.titulo,
+      info: t.info,
+      materia: t.materia,
+      profesor: t.profesor,
+      seccion: t.seccion,
+      tipo: t.tipo,
+      estado: t.estado,
+      fecha_entrega: t.fechaEntrega,
+      puntuacion: t.puntuacion,
+      descripcion: t.descripcion,
+    }));
+
+  const { data: tareasPrevias, error: fetchError } = await supabaseAdmin
+    .from('tareas')
+    .select('*')
+    .eq('user_id', user_id);
+
+  if (fetchError) throw fetchError;
+
+  const { nuevas, actualizadas, eliminadas } = detectarCambios(tareasPrevias || [], tareasFormateadas);
+  await sincronizarCambios(user_id, nuevas, actualizadas, eliminadas);
 };
 
 router.post('/:user_id', async (req, res) => {
