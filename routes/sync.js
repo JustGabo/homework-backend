@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const scrapeTareas = require('../scraper');
-const { supabasePublic, supabaseAdmin } = require('../supabaseClient');
+const { supabaseAdmin } = require('../supabaseClient');
 const deepEqual = require('fast-deep-equal');
+const { sendNotificationEmail } = require('../utils/mailer');
+const { generateNewTaskEmailHTML } = require('../templates/emails');
 
 const getCredentials = async (user_id) => {
   const { data, error } = await supabaseAdmin
@@ -64,6 +66,27 @@ const sincronizarCambios = async (user_id, nuevas, actualizadas, eliminadas) => 
       .delete()
       .eq('user_id', user_id)
       .eq('tarea_id', tarea.tarea_id);
+  }
+
+  if (tareasToInsert.length > 0) {
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('email')
+      .eq('id', user_id)
+      .single();
+
+    if (!userError && userData && userData.email) {
+      for (const tarea of tareasToInsert) {
+        const subject = `Nueva tarea: ${tarea.titulo}`;
+        const html = generateNewTaskEmailHTML(tarea);
+
+        try {
+          await sendNotificationEmail(userData.email, subject, html);
+        } catch (err) {
+          console.error('Error enviando email:', err.message);
+        }
+      }
+    }
   }
 };
 
