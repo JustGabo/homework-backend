@@ -4,7 +4,20 @@ puppeteer.use(StealthPlugin());
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const scrapeTareas = async (matricula, password) => {
+// Retry wrapper para reintentar en caso de error temporal
+const scrapeTareas = async (matricula, password, retries = 2) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await _scrapeTareas(matricula, password);
+    } catch (err) {
+      console.warn(`[scrapeTareas] Intento ${i + 1} fallido: ${err.message}`);
+      if (i === retries - 1) throw err;
+      await delay(3000); // espera antes del próximo intento
+    }
+  }
+};
+
+const _scrapeTareas = async (matricula, password) => {
   let browser;
 
   try {
@@ -16,8 +29,8 @@ const scrapeTareas = async (matricula, password) => {
 
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
-
-    const LOGIN_URL = process.env.LOGIN_URL; // ✅ ahora toma la URL del .env
+    
+    const LOGIN_URL = process.env.LOGIN_URL;
     await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     await page.type('#user', matricula);
@@ -108,10 +121,15 @@ const scrapeTareas = async (matricula, password) => {
       })
     );
 
+    if (!Array.isArray(tareas) || tareas.length === 0) {
+      throw new Error('No se encontraron tareas. Posible error en el scraping.');
+    }
+
     return tareas;
 
   } catch (err) {
-    console.error('Error en scrapeTareas:', err.message);
+    console.error('[scrapeTareas] Error crítico:', err.message);
+    console.error(err.stack);
     throw new Error(err.message || 'Fallo al obtener tareas');
   } finally {
     if (browser) await browser.close().catch(() => null);
